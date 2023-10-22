@@ -30,20 +30,20 @@
     "url": "git+https://github.com/maximilianMairinger/moreProms.git"
   },
   "keywords": [
-  "more",
-  "promises",
-  "collection",
-  "cancelable",
-  "promise",
-  "cancel",
-  "able",
-  "cancelablepromise",
-  "resolve",
-  "res",
-  "resable",
-  "resolveable",
-  "latent"
-],
+    "more",
+    "promises",
+    "collection",
+    "cancelable",
+    "promise",
+    "cancel",
+    "able",
+    "cancelablepromise",
+    "resolve",
+    "res",
+    "resable",
+    "resolveable",
+    "latent"
+  ],
   "author": "maximilianMairinger",
   "license": "ISC",
   "bugs": {
@@ -66,14 +66,16 @@
     "mjsify": "^2.0.6",
     "open": "^9.1.0",
     "rollup": "^3.21.7",
+    "tiny-delay": "^1.0.6",
     "tslib": "2.0.0",
     "typescript": "^5.0.4",
     "wait-on": "^7.0.1",
     "webpack-merge": "^5.0.9"
   },
   "dependencies": {
-    "commander": "^10.0.1",
     "colorful-cli-logger": "^1.0.0",
+    "commander": "^10.0.1",
+    "key-index": "^1.4.18",
     "req-package-json": "^2.1.2"
   }
 }
