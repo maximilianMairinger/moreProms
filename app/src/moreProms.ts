@@ -1,24 +1,17 @@
 import { memoize } from "key-index"
 
 
-// export function latestLatentRequest<Args extends unknown[], Ret>(cb: (...args: Args) => Promise<Ret>, ...thens: ((ret: Ret, ...args: Args) => void)[]) {
-//   let globalRecent = Symbol()
-//   async function request(...args: Args) {
-//     const recent = globalRecent = Symbol()
-//     let ret = await cb(...args)
-//     for (const then of thens) {
-//       if (globalRecent === recent) {
-//         then(ret, ...args)
-        
-//       }
-//       else break
-//     }
-    
-//     return ret
-//   }
+export function latestLatent<Args extends unknown[], Ret>(cb: (...args: Args) => (CancelAblePromise<Ret> | Promise<Ret>)) {
+  let lastProm = new CancelAblePromise<Ret>(() => {}, () => {})
+  function request(...args: Args) {
+    lastProm.cancel()
+    const r = cb(...args) 
+    lastProm = r instanceof CancelAblePromise ? r : new CancelAblePromise<Ret>((res, rej) => { r.then(res, rej) }, () => {})
+    return lastProm
+  }
 
-//   return request
-// }
+  return request
+}
 
 
 export class SettledPromise<T = unknown> extends Promise<T> {
@@ -27,11 +20,13 @@ export class SettledPromise<T = unknown> extends Promise<T> {
 
   constructor(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void) {
     super((res, rej) => {
-      executor((a) => {
+      executor(async (a) => {
+        await a
         this.settled = true
         r()
         res(a)
-      }, (a) => {
+      }, async (a) => {
+        await a
         this.settled = true
         r()
         rej(a)
@@ -72,22 +67,26 @@ export class ResablePromise<T = unknown> extends SettledPromise<T> {
 export class CancelAblePromise<T = unknown, C = unknown> extends SettledPromise<T> {
   public cancelled: boolean = false
   public cancel: () => void
-  constructor(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, cancel: () => C) {
+  private nestedCancels: Function[] = []
+  constructor(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, cancel?: () => C) {
     super((res, rej) => {
-      const r = (a) => {
+      const r = async (a) => {
+        await a
         if (this.cancelled) return
         res(a)
       }
-      const rj = (a) => {
+      const rj = async (a) => {
+        await a
         if (this.cancelled) return
         rej(a)
       }
       executor(r, rj)
     })
     this.cancel = memoize(() => {
+      for (const f of this.nestedCancels) f()
       if (this.settled) return
       this.cancelled = true
-      return cancel()
+      if (cancel !== undefined) return cancel()
     })
   }
 
@@ -96,14 +95,14 @@ export class CancelAblePromise<T = unknown, C = unknown> extends SettledPromise<
     onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined
   ): CancelAblePromise<TResult1 | TResult2> {
     const r = super.then(onfulfilled, onrejected) as CancelAblePromise<TResult1 | TResult2>
-    r.cancel = this.cancel
+    this.nestedCancels.push(r.cancel)
     return r
   }
   catch<TResult = never>(
     onrejected: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined
   ): CancelAblePromise<T | TResult> {
     const r = super.catch(onrejected) as CancelAblePromise<T | TResult>
-    r.cancel = this.cancel
+    this.nestedCancels.push(r.cancel)
     return r
   }
 
