@@ -1,57 +1,66 @@
 import { memoize } from "key-index"
 
 
-type P<Args extends unknown[], Ret, OgRet> = {
-  then<TResult1 = Ret, TResult2 = never>(onfulfilled?: ((value: Ret) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): P<Args, TResult1 | TResult2, OgRet>
-  catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): P<Args, Ret | TResult, OgRet>;
-} & ((...a: Args) => (CancelAblePromise<OgRet> | Promise<OgRet> | undefined))
+type P<Args extends unknown[], Ret> = {
+  then<TResult1 = Ret, TResult2 = never>(onfulfilled?: ((value: Ret) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): P<Args, TResult1 | TResult2>
+  catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): P<Args, Ret | TResult>;
+} & ((...a: Args) => (CancelAblePromise<Ret> | Promise<Ret> | undefined))
 
-export function latestLatent<Args extends unknown[], Ret>(cb: (...args: Args) => (CancelAblePromise<Ret> | Promise<Ret> | undefined)): P<Args, Ret, Ret> {
-  let lastProm = new CancelAblePromise<Ret>(() => {}, () => {})
+export function latestLatent<Args extends unknown[], Ret>(cb: (...args: Args) => (CancelAblePromise<Ret> | Promise<Ret> | undefined)): P<Args, Ret> {
+  let prom = new CancelAblePromise<Ret>(() => {}, () => {})
   
   function request(...args: Args) {
-    lastProm.cancel()
+    prom.cancel()
     const r = cb(...args) 
-    lastProm = r instanceof CancelAblePromise ? r : new CancelAblePromise<Ret>((res, rej) => { r.then(res, rej) }, () => {})
-    lastPromHasUpdated(futures, lastProm)
-    return lastProm
+    prom = r instanceof CancelAblePromise ? r : new CancelAblePromise<Ret>((res, rej) => { r.then(res, rej) }, () => {})
+    lastPromHasUpdated(futures, prom)
+    // console.log("callingVesselProm", callingPromUID)
+    return callingPromUID === undefined ? prom : uidToProm.get(callingPromUID)
   }
 
-  function lastPromHasUpdated(futures: Future, vessel: any) {
-    for (const {func, args, deeper} of futures) {
-      const nxtVessel = vessel[func](...args)
-      lastPromHasUpdated(deeper, nxtVessel)
+  function lastPromHasUpdated(futures: Future, prom: any) {
+    for (const {func, args, deeper, uid} of futures) {
+      const nxtProm = prom[func](...args) as Promise<any>
+      uidToProm.set(uid, nxtProm)
+      lastPromHasUpdated(deeper, nxtProm)
     }
   }
 
-  type Future = {func: string, args: any[], deeper: Future}[]
+  type Future = {func: string, args: any[], deeper: Future, uid: any}[]
+
+  const uidToProm = new Map<any, Promise<any>>()
 
   let futures = [] as Future
+  let callingPromUID: any = undefined
 
-  function propergateFuture(vessel: any, future: Future, func: "then" | "catch", lastVessel: {then: any, catch: any}) {
+  function propagateFuture(vessel: any, future: Future, func: "then" | "catch", lastProm: Promise<any>) {
     vessel[func] = (...args: any[]) => {
       const deeper = []
-      future.push({func, args, deeper})
-      // @ts-ignore
-      const lastVesselProm = lastVessel[func](...args)
-
+      const prom = (lastProm[func] as any)(...args) as Promise<any>
+      
       const nxtVessel = (...a: any[]) => {
-        return vessel(...a)
+        callingPromUID = nxtVessel
+        const r = (request as any)(...a)
+        callingPromUID = undefined
+        return r
       }
-      propergateFuture(nxtVessel, deeper, "then", lastVesselProm)
-      propergateFuture(nxtVessel, deeper, "catch", lastVesselProm)
+      uidToProm.set(nxtVessel, prom)
+      future.push({func, args, deeper, uid: nxtVessel})
+
+      propagateFuture(nxtVessel, deeper, "then", prom)
+      propagateFuture(nxtVessel, deeper, "catch", prom)
       return nxtVessel
     }
     
   }
   
-  propergateFuture(request, futures, "then", lastProm)
-  propergateFuture(request, futures, "catch", lastProm)
+  propagateFuture(request, futures, "then", prom)
+  propagateFuture(request, futures, "catch", prom)
 
 
   
 
-  return request as P<Args, Ret, Ret>
+  return request as P<Args, Ret>
 }
 
 

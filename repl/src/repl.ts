@@ -10,33 +10,32 @@ const f = latestLatent(async () => {
   return "hi"
 })
 
-f.then(async () => {
+const f2 = f.then(async () => {
   console.log("a1")
   await delay(500)
-}).then(() => {
+  return "1lel"
+})
+
+const f3 = f2.then(async (lel) => {
   console.log("a2")
+  await delay(500)
+  return "2lel" + lel
 })
 
 
+const p = f2()
+const p2 = f3()
 
-
-const p = f()
-
-const p2 = p.then(async (h) => {
-  console.log("1")
-  await delay(200)
-  
-  return h + " there"
-})
-
-
+p.then(console.log)
 p2.then(console.log)
 
 
 
 
-delay(1100, () => {
+
+
+delay(1600, () => {
   console.log("cancel")
-  f()
+  f2().then(console.log)
   // p.cancel()
 })
