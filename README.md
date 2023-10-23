@@ -55,21 +55,31 @@ promRes()
 
 `CancelAblePromise` is a subclass of `SettledPromise` that adds cancellation support. It has a `cancel` method for the consumer that can be used to cancel the promise. A canceled promise will never resolve nor will it reject.
 
-Nested cancellation are also supported. More specific: where nested promises created by `then` or `catch` methods are cancelled when the parent promise is cancelled.
+The promise provider can provide a callback will only ever be called once, and wont be called after resolvement or rejection. This callback can be used to e.g. cancel an ongoing animation, or network request.
+
+Note how in this example the clearance of the timeout will have no effect, as a canceled promise wont resolve nor reject even if resolve is called after the timeout finishes. But the two example use cases from above could actually do something useful in the cancel callback.
+
 
 ```ts
 import { CancelAblePromise } from "more-proms"
 
+let timeout
 const p = new CancelAblePromise<string>((resolve, reject) => {
-  setTimeout(() => {
+  timeout = setTimeout(() => {
     resolve("Hello, world!")
   }, 1000)
+}, () => {
+  console.log("cancelled")
+  clearTimeout(timeout)
 })
+
+
+// later
 
 p.cancel()
 ```
 
-A nested example: Note how `p1` is cancelled before `p2` resolve, hence only the `p1` will resolve, the `p2` will never resolve.
+Nested cancellation are also supported. More specific: where nested promises created by `then` or `catch` methods are cancelled when the parent promise is cancelled. A nested example follows below. Note how `p1` is cancelled before `p2` resolve, hence only the `p1` will resolve, the `p2` will never resolve.
 
 ```ts
 const p1 = new CancelAblePromise<string>((resolve, reject) => {
