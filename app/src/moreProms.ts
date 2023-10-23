@@ -30,7 +30,9 @@ export function latestLatent<Args extends unknown[], Ret>(cb: (...args: Args) =>
       // @ts-ignore
       const lastVesselProm = lastVessel[func](...args)
 
-      const nxtVessel = {}
+      const nxtVessel = (...a: any[]) => {
+        return vessel(...a)
+      }
       propergateFuture(nxtVessel, deeper, "then", lastVesselProm)
       propergateFuture(nxtVessel, deeper, "catch", lastVesselProm)
       return nxtVessel
