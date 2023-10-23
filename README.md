@@ -135,8 +135,6 @@ This way you can be sure that the popup doesnt get `display: none`, when the use
 You may have noticed that the location in your code where you want to `showPopup()` may have a different concern than ensuring that the popupElement is properly hidden. So, to keep the concerns where they belong, you can chain then calls directly on the showPopup provider (where it is declared).
 
 ```ts
-import { latestLatent } from "more-proms"
-
 const showPopup = latestLatent(async () => {
   element.css({display: "block"})
   await element.animate({opacity: 1})
@@ -154,6 +152,60 @@ showButton.on("click", () => {
 })
 ```
 
+Note that these provider then calls change the output of the function (in this case `showPopup`), just like `then` calls on a promise change the output of the promise. So if you want to get the original functions output, you have to call the reference to the original function.
+
+```ts
+const hello = latestLatent(async () => {
+  await delay(100)
+  return "hello"
+})
+
+const helloWorld = hello.then(async (w) => {
+  await delay(100)
+  return w + " world"
+})
+
+// later
+
+hello().then((w) => {
+  console.log(w) // hello
+})
+
+
+
+await delay(1000) // lets begin another example
+
+
+
+// here both hello and helloWorld are called, since the delay between them is large enough for hello() to settle.
+
+hello().then((w) => {
+  console.log(w) // hello
+})
+
+await delay(150)
+
+helloWorld().then((w) => {
+  console.log(w) // hello world
+})
+
+
+await delay(1000) // lets begin another example
+
+
+
+// here only hello is called, since the delay between them is not large enough for helloWorld() to settle.
+
+helloWorld().then((w) => {
+  console.log(w) // wont ever get here
+})
+
+await delay(150)
+
+hello().then((w) => {
+  console.log(w) // hello
+})
+```
 
 
 ## Contribute
