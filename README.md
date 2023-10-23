@@ -115,16 +115,45 @@ import { latestLatent } from "more-proms"
 const showPopup = latestLatent(async () => {
   element.css({display: "block"})
   await element.animate({opacity: 1})
-  await waitForCloseInput()
+  await closeButton.waitForClick()
   await element.animate({opacity: 0})
 })
 
-showPopup().then(() => {
-  element.css({display: "none"})
+
+// later
+
+showButton.on("click", () => {
+  showPopup().then(() => {
+    element.css({display: "none"})
+  })
 })
+
 ```
 
 This way you can be sure that the popup doesnt get `display: none`, when the user opens it again before it has been fully closed (the animation finishes).
+
+You may have noticed that the location in your code where you want to `showPopup()` may have a different concern than ensuring that the popupElement is properly hidden. So, to keep the concerns where they belong, you can chain then calls directly on the showPopup provider (where it is declared).
+
+```ts
+import { latestLatent } from "more-proms"
+
+const showPopup = latestLatent(async () => {
+  element.css({display: "block"})
+  await element.animate({opacity: 1})
+  await closeButton.waitForClick()
+  await element.animate({opacity: 0})
+}).then(() => {
+  element.css({display: "none"})
+})
+
+
+// later
+
+showButton.on("click", () => {
+  showPopup()
+})
+```
+
 
 
 ## Contribute
