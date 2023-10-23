@@ -1,16 +1,53 @@
 import { memoize } from "key-index"
-
+Promise.resolve().then
 
 export function latestLatent<Args extends unknown[], Ret>(cb: (...args: Args) => (CancelAblePromise<Ret> | Promise<Ret>)) {
   let lastProm = new CancelAblePromise<Ret>(() => {}, () => {})
+  
   function request(...args: Args) {
     lastProm.cancel()
     const r = cb(...args) 
     lastProm = r instanceof CancelAblePromise ? r : new CancelAblePromise<Ret>((res, rej) => { r.then(res, rej) }, () => {})
+    lastPromHasUpdated(futures, lastProm)
     return lastProm
   }
 
-  return request
+  function lastPromHasUpdated(futures: Future, vessel: any) {
+    for (const {func, args, deeper} of futures) {
+      const nxtVessel = vessel[func](...args)
+      lastPromHasUpdated(deeper, nxtVessel)
+    }
+  }
+
+  type Future = {func: string, args: any[], deeper: Future}[]
+
+  let futures = [] as Future
+
+  function propergateFuture(vessel: any, future: Future, func: "then" | "catch", lastVessel: {then: any, catch: any}) {
+    vessel[func] = (...args: any[]) => {
+      const deeper = []
+      future.push({func, args, deeper})
+      // @ts-ignore
+      const lastVesselProm = lastVessel[func](...args)
+
+      const nxtVessel = {}
+      propergateFuture(nxtVessel, deeper, "then", lastVesselProm)
+      propergateFuture(nxtVessel, deeper, "catch", lastVesselProm)
+      return nxtVessel
+    }
+    
+  }
+  
+  propergateFuture(request, futures, "then", lastProm)
+  propergateFuture(request, futures, "catch", lastProm)
+
+
+  type P<Ret> = {
+    then<TResult1 = Ret, TResult2 = never>(onfulfilled?: ((value: Ret) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): P<TResult1 | TResult2>
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): P<Ret | TResult>;
+  }
+
+  return request as typeof request & P<Ret>
 }
 
 
@@ -48,14 +85,14 @@ export class ResablePromise<T = unknown> extends SettledPromise<T> {
   public readonly res: (t: T) => void
   public readonly rej: (err: any) => void
   
-  constructor(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void) {
+  constructor(executor?: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void) {
     let res: any
     let rej: any
     super((r, rj) => {
       res = r
       rej = rj
 
-      executor(r, rj)
+      if (executor) executor(r, rj)
     })
 
     this.res = res
