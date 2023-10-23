@@ -1,7 +1,12 @@
 import { memoize } from "key-index"
-Promise.resolve().then
 
-export function latestLatent<Args extends unknown[], Ret>(cb: (...args: Args) => (CancelAblePromise<Ret> | Promise<Ret>)) {
+
+type P<Args extends unknown[], Ret, OgRet> = {
+  then<TResult1 = Ret, TResult2 = never>(onfulfilled?: ((value: Ret) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): P<Args, TResult1 | TResult2, OgRet>
+  catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): P<Args, Ret | TResult, OgRet>;
+} & ((...a: Args) => (CancelAblePromise<OgRet> | Promise<OgRet> | undefined))
+
+export function latestLatent<Args extends unknown[], Ret>(cb: (...args: Args) => (CancelAblePromise<Ret> | Promise<Ret> | undefined)): P<Args, Ret, Ret> {
   let lastProm = new CancelAblePromise<Ret>(() => {}, () => {})
   
   function request(...args: Args) {
@@ -44,12 +49,9 @@ export function latestLatent<Args extends unknown[], Ret>(cb: (...args: Args) =>
   propergateFuture(request, futures, "catch", lastProm)
 
 
-  type P<Ret> = {
-    then<TResult1 = Ret, TResult2 = never>(onfulfilled?: ((value: Ret) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): P<TResult1 | TResult2>
-    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): P<Ret | TResult>;
-  }
+  
 
-  return request as typeof request & P<Ret>
+  return request as P<Args, Ret, Ret>
 }
 
 
