@@ -64,7 +64,7 @@ export function latestLatent<Args extends unknown[], Ret>(cb: (...args: Args) =>
 }
 
 
-export class SettledPromise<T = unknown> extends Promise<T> {
+export class SettledPromise<T = void> extends Promise<T> {
   public settled: boolean = false
   public onSettled: Promise<void>
 
@@ -93,7 +93,7 @@ export class SettledPromise<T = unknown> extends Promise<T> {
 
 
 
-export class ResablePromise<T = unknown> extends SettledPromise<T> {
+export class ResablePromise<T = void> extends SettledPromise<T> {
   
   public readonly res: (t: T) => void
   public readonly rej: (err: any) => void
