@@ -173,9 +173,9 @@ function allOrRace<T, C>(allOrRace: "all" | "race", proms: CancelAblePromise<T, 
     return proms.map((p) => p.cancel())
   })
 
-  if (ifOneChildCancels === "ignore") Promise.all(proms.map((p) => p.cancelled)).then(newP.cancel)
-  else if (ifOneChildCancels === "cancelThis") Promise.race(proms.map((p) => p.cancelled)).then(newP.cancel)
-  else if (ifOneChildCancels === "cancelAll") Promise.all(proms.map((p) => p.cancelled)).then(() => {
+  if (ifOneChildCancels === "ignore") Promise.all(proms.map((p) => p.onCancel)).then(newP.cancel)
+  else if (ifOneChildCancels === "cancelThis") Promise.race(proms.map((p) => p.onCancel)).then(newP.cancel)
+  else if (ifOneChildCancels === "cancelAll") Promise.all(proms.map((p) => p.onCancel)).then(() => {
     for (const prom of proms) prom.cancel()
     newP.cancel()
   })
