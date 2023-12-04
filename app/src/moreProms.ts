@@ -117,6 +117,7 @@ export class ResablePromise<T = void> extends SettledPromise<T> {
 export class CancelAblePromise<T = unknown, C = unknown> extends SettledPromise<T> {
   public cancelled: boolean = false
   public cancel: () => void
+  public onCancel: Promise<void> = new ResablePromise(() => {})
   private nestedCancels: Function[] = []
   constructor(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, cancel?: () => C) {
     super((res, rej) => {
@@ -135,10 +136,12 @@ export class CancelAblePromise<T = unknown, C = unknown> extends SettledPromise<
     this.cancel = memoize(() => {
       for (const f of this.nestedCancels) f()
       if (this.settled) return
-      this.cancelled = true
+      this.cancelled = true;
+      (this.onCancel as ResablePromise).res()
       if (cancel !== undefined) return cancel()
     })
   }
+
 
   then<TResult1 = T, TResult2 = never>(
     onfulfilled: ((value: T) => TResult1 | PromiseLike<TResult1>) | null | undefined,
