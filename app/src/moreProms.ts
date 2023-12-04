@@ -158,6 +158,26 @@ export class CancelAblePromise<T = unknown, C = unknown> extends SettledPromise<
     this.nestedCancels.push(r.cancel)
     return r
   }
-
+  static all(proms: CancelAblePromise[], ifOneChildCancels: "ignore" | "cancelThis" | "cancelAll" = "ignore") {
+    return allOrRace("all", proms, ifOneChildCancels)
+  }
+  static race(proms: CancelAblePromise[], ifOneChildCancels: "ignore" | "cancelThis" | "cancelAll" = "ignore") {
+    return allOrRace("race", proms, ifOneChildCancels)
+  }
 }
 
+function allOrRace(allOrRace: "all" | "race", proms: CancelAblePromise[], ifOneChildCancels: "ignore" | "cancelThis" | "cancelAll" = "ignore") {
+  const newP = new CancelAblePromise((res, rej) => {
+    Promise[allOrRace as "all"](proms).then(res, rej)
+  }, () => {
+    for (const p of proms) p.cancel()
+  })
+
+  if (ifOneChildCancels === "ignore") Promise.all(proms.map((p) => p.cancelled)).then(newP.cancel)
+  else if (ifOneChildCancels === "cancelThis") Promise.race(proms.map((p) => p.cancelled)).then(newP.cancel)
+  else if (ifOneChildCancels === "cancelAll") Promise.all(proms.map((p) => p.cancelled)).then(() => {
+    for (const prom of proms) prom.cancel()
+    newP.cancel()
+  })
+  return newP
+}
