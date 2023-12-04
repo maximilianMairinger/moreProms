@@ -116,7 +116,7 @@ export class ResablePromise<T = void> extends SettledPromise<T> {
 
 export class CancelAblePromise<T = unknown, C = unknown> extends SettledPromise<T> {
   public cancelled: boolean = false
-  public cancel: () => void
+  public cancel: () => C
   public onCancel: Promise<void> = new ResablePromise(() => {})
   private nestedCancels: Function[] = []
   constructor(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, cancel?: () => C) {
@@ -166,11 +166,11 @@ export class CancelAblePromise<T = unknown, C = unknown> extends SettledPromise<
   }
 }
 
-function allOrRace(allOrRace: "all" | "race", proms: CancelAblePromise[], ifOneChildCancels: "ignore" | "cancelThis" | "cancelAll" = "ignore") {
-  const newP = new CancelAblePromise((res, rej) => {
+function allOrRace<T, C>(allOrRace: "all" | "race", proms: CancelAblePromise<T, C>[], ifOneChildCancels: "ignore" | "cancelThis" | "cancelAll" = "ignore") {
+  const newP = new CancelAblePromise<T[], C[]>((res, rej) => {
     Promise[allOrRace as "all"](proms).then(res, rej)
   }, () => {
-    for (const p of proms) p.cancel()
+    return proms.map((p) => p.cancel())
   })
 
   if (ifOneChildCancels === "ignore") Promise.all(proms.map((p) => p.cancelled)).then(newP.cancel)
