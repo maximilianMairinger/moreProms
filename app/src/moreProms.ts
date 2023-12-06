@@ -114,12 +114,12 @@ export class ResablePromise<T = void> extends SettledPromise<T> {
 }
 
 
-export class CancelAblePromise<T = unknown, C = unknown> extends SettledPromise<T> {
+export class CancelAblePromise<T = unknown, C = void> extends SettledPromise<T> {
   public cancelled: boolean = false
-  public cancel: () => C
-  public onCancel: Promise<void> = new ResablePromise(() => {})
+  public cancel: (reason: C) => void
+  public onCancel: Promise<C> = new ResablePromise(() => {})
   private nestedCancels: Function[] = []
-  constructor(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, cancel?: () => C) {
+  constructor(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, cancel?: (reason: C) => void) {
     super((res, rej) => {
       const r = async (a) => {
         await a
@@ -133,12 +133,12 @@ export class CancelAblePromise<T = unknown, C = unknown> extends SettledPromise<
       }
       executor(r, rj)
     })
-    this.cancel = memoize(() => {
+    this.cancel = memoize((reason: C) => {
       for (const f of this.nestedCancels) f()
       if (this.settled) return
       this.cancelled = true;
-      (this.onCancel as ResablePromise).res()
-      if (cancel !== undefined) return cancel()
+      (this.onCancel as ResablePromise<C>).res(reason)
+      if (cancel !== undefined) cancel(reason)
     })
   }
 
@@ -167,17 +167,17 @@ export class CancelAblePromise<T = unknown, C = unknown> extends SettledPromise<
 }
 
 function allOrRace<T, C>(allOrRace: "all" | "race", proms: CancelAblePromise<T, C>[], ifOneChildCancels: "ignore" | "cancelThis" | "cancelAll" = "ignore") {
-  const newP = new CancelAblePromise<T[], C[]>((res, rej) => {
+  const newP = new CancelAblePromise<T[], C>((res, rej) => {
     Promise[allOrRace as "all"](proms).then(res, rej)
-  }, () => {
-    return proms.map((p) => p.cancel())
+  }, (reason) => {
+    return proms.map((p) => p.cancel(reason))
   })
 
-  if (ifOneChildCancels === "ignore") Promise.all(proms.map((p) => p.onCancel)).then(newP.cancel)
+  if (ifOneChildCancels === "ignore") Promise.all(proms.map((p) => p.onCancel)).then((r) => {newP.cancel(r[0])})
   else if (ifOneChildCancels === "cancelThis") Promise.race(proms.map((p) => p.onCancel)).then(newP.cancel)
-  else if (ifOneChildCancels === "cancelAll") Promise.all(proms.map((p) => p.onCancel)).then(() => {
-    for (const prom of proms) prom.cancel()
-    newP.cancel()
+  else if (ifOneChildCancels === "cancelAll") Promise.race(proms.map((p) => p.onCancel)).then((e) => {
+    for (const prom of proms) prom.cancel(e)
+    newP.cancel(e)
   })
   return newP
 }
