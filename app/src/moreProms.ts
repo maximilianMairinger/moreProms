@@ -12,7 +12,7 @@ export function latestLatent<Args extends unknown[], Ret>(cb: (...args: Args) =>
   function request(...args: Args) {
     prom.cancel()
     const r = cb(...args) 
-    prom = r instanceof CancelAblePromise ? r : new CancelAblePromise<Ret>((res, rej) => { r.then(res, rej) }, () => {})
+    prom = r instanceof CancelAblePromise ? r as CancelAblePromise<Ret> : new CancelAblePromise<Ret>((res, rej) => { r.then(res, rej) }, () => {})
     lastPromHasUpdated(futures, prom)
     // console.log("callingVesselProm", callingPromUID)
     return callingPromUID === undefined ? prom : uidToProm.get(callingPromUID)
@@ -190,15 +190,20 @@ export class SyncPromise<T = unknown> {
 }
 
 
-
-export const {ResablePromise, CancelAblePromise, SettledPromise} = mkExt(Promise)
+const {SettledPromise: _SettledPromise, ResablePromise: _ResablePromise, CancelAblePromise: _CancelAblePromise} = mkExt(Promise)
+export const SettledPromise = _SettledPromise as typeof Promise & { new<T = void>(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void): SettledPromise<T> }
 export type SettledPromise<T = void> = Promise<T> & {settled: boolean, onSettled: Promise<void>}
+export const ResablePromise = _ResablePromise as typeof Promise & { new<T = void>(executor?: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void): ResablePromise<T> }
 export type ResablePromise<T = void> = SettledPromise<T> & {res: (t: T) => void, rej: (err: any) => void}
+export const CancelAblePromise = _CancelAblePromise as typeof Promise & { new<T = unknown, C = void>(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, cancel?: (reason: C) => void): CancelAblePromise<T, C> }
 export type CancelAblePromise<T = unknown, C = void> = SettledPromise<T> & {cancel: (reason: C) => void, cancelled: boolean, onCancel: ResablePromise<C>}
 
-export const {ResablePromise: ResableSyncPromise, CancelAblePromise: CancelAbleSyncPromise, SettledPromise: SettledSyncPromise} = mkExt(SyncPromise as any)
+const {ResablePromise: _ResableSyncPromise, CancelAblePromise: _CancelAbleSyncPromise, SettledPromise: _SettledSyncPromise} = mkExt(SyncPromise as any)
+export const ResableSyncPromise = _ResableSyncPromise as any as typeof SyncPromise & { new<T = void>(executor?: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void): ResableSyncPromise<T> }
 export type SettledSyncPromise<T = void> = SyncPromise<T> & {settled: boolean, onSettled: Promise<void>}
+export const CancelAbleSyncPromise = _CancelAbleSyncPromise as any as typeof SyncPromise & { new<T = unknown, C = void>(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, cancel?: (reason: C) => void): CancelAbleSyncPromise<T, C> }
 export type ResableSyncPromise<T = void> = SettledSyncPromise<T> & {res: (t: T) => void, rej: (err: any) => void}
+export const SettledSyncPromise = _SettledSyncPromise as any as typeof SyncPromise & { new<T = void>(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void): SettledSyncPromise<T> }
 export type CancelAbleSyncPromise<T = unknown, C = void> = SettledSyncPromise<T> & {cancel: (reason: C) => void, cancelled: boolean, onCancel: ResableSyncPromise<C>}
 
 
