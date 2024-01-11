@@ -65,6 +65,37 @@ export function latestLatent<Args extends unknown[], Ret>(cb: (...args: Args) =>
 
 
 
+export function execQueue() {
+  const queue = [] as {p: ResablePromise, f: () => Promise<any>}[]
+  let running = false
+
+  async function makeSureQueueIsStarted() {
+    if (running) return
+    running = true
+    await runNext()
+    running = false
+  }
+
+  async function runNext() {
+    const {p, f} = queue.shift()!
+    try {
+      p.res(await f())
+    } catch (error) {
+      p.rej(error)
+    }
+    if (queue.length !== 0) await runNext()
+  }
+
+
+  return <T>(f: () => Promise<T>) => {
+    const p = new ResablePromise()
+    queue.push({f, p})
+    makeSureQueueIsStarted()
+    return p
+  }
+}
+
+
 
 export class SyncPromise<T = unknown> {
   private thenListener: {f: (res: T) => unknown, res: Function, rej: Function}[] = []
