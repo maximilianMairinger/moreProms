@@ -66,7 +66,7 @@
     "mjsify": "^2.0.6",
     "open": "^9.1.0",
     "rollup": "^3.21.7",
-    "tiny-delay": "^1.0.6",
+    "tiny-delay": "^1.2.0",
     "tslib": "2.0.0",
     "typescript": "^5.0.4",
     "wait-on": "^7.0.1",

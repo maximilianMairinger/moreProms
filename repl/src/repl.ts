@@ -1,35 +1,49 @@
-import { CancelAblePromise, latestLatent } from "../../app/src/moreProms"
+import { CancelAblePromise, latestLatent, execQueue, ResablePromise } from "../../app/src/moreProms"
 import delay from "tiny-delay"
 // //const testElem = document.querySelector("#test")
 
 
 
-const f = latestLatent(async () => {
-  console.log("0")
+const q = execQueue()
+
+
+const pp = new CancelAblePromise(() => {
+
+}, async () => {
+  console.log("canc0start")
+  await delay(500)
+  console.log("canc0done")
+})
+pp.onCancel.then(() => console.log("canc0prom"))
+
+q(() => pp)
+
+q(async () => {
+  console.log("start1")
   await delay(1000)
-  return "hi"
-})
+  console.log("end1")
+}, false)
 
-const f2 = f.then(async () => {
-  console.log("a1")
-  await delay(500)
-  return "1lel"
-})
-
-const f3 = f2.then(async (lel) => {
-  console.log("a2")
-  await delay(500)
-  // return "2lel" + lel
-})
-
-
-const p = f3()
-
-
-p.then(console.log)
+q(async () => {
+  await delay(1000)
+  console.log("2")
+}, true)
 
 
 
+
+q(() => {
+  console.log("start3")
+  const cp = delay(1000)
+  cp.then(() => console.log("end3"))
+  cp.onCancel.then(() => console.log("canc3"))
+  return cp
+}, false)
+
+
+q(async () => {
+  console.log("4")
+}, false, true)
 
 
 
