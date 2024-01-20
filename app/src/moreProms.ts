@@ -87,7 +87,9 @@ export function execQueue(defaultOptions = {
     while(queue.length !== 0) {
       const ob = curOb = queue.shift()!
       const { p, f, skipAble, cancelVal } = ob
-      const wantToCancelThis = wantToCancelUntil !== undefined && wantToCancelUntil !== ob
+      if (wantToCancelUntil === ob) wantToCancelUntil = undefined
+      const wantToCancelThis = wantToCancelUntil !== undefined
+
       if (!(wantToCancelThis && skipAble)) {
         const prom = curFP = f()
         curCancelVal = cancelVal
