@@ -75,7 +75,7 @@ export function execQueue(defaultOptions = {
   let curFP: AnyPromOrCancProm
   let curCancelVal: any
   let running = false
-  let wantToCancelUntil: object | undefined
+  let wantToCancelUntil: typeof queue[number] | undefined
   let curOb: any
   let cancelDataStore: {cancelResult: any} | undefined
 
@@ -139,7 +139,7 @@ export function execQueue(defaultOptions = {
     const ob = { f, p, skipAble: options.skipAble, cancelVal: options.cancelVal }
     queue.push(ob)
     if (cancelPrevIfPossible && running) {
-      wantToCancelUntil = ob
+      wantToCancelUntil = wantToCancelUntil === undefined ? ob : queue[Math.max(queue.indexOf(wantToCancelUntil), queue.indexOf(ob))]
       if ("cancel" in curFP) curFP.cancel(curCancelVal)
     }
       
