@@ -63,12 +63,21 @@ export function latestLatent<Args extends unknown[], Ret>(cb: (...args: Args) =>
   return request as P<Args, Ret>
 }
 
-export function execQueue() {
+
+
+
+export function execQueue(defaultOptions = {
+  skipAble: false,
+  cancelVal: "cancelled by execQueue"
+}) {
   type AnyPromOrCancProm = Promise<any> | CancelAblePromise<any, string, string | void | undefined | null | Promise<any>>
-  const queue = [] as {skipAble: boolean, p: ResablePromise<any>, f: () => AnyPromOrCancProm}[]
+  const queue = [] as {skipAble: boolean, p: CancelAblePromise<any>, f: () => AnyPromOrCancProm, cancelVal: any}[]
   let curFP: AnyPromOrCancProm
+  let curCancelVal: any
   let running = false
   let wantToCancelUntil: object | undefined
+  let curOb: any
+  let cancelDataStore: {cancelResult: any} | undefined
 
   async function makeSureQueueIsStarted() {
     if (running) return
@@ -76,20 +85,30 @@ export function execQueue() {
 
 
     while(queue.length !== 0) {
-      const ob = queue.shift()!
-      const { p, f, skipAble } = ob
+      const ob = curOb = queue.shift()!
+      const { p, f, skipAble, cancelVal } = ob
       const wantToCancelThis = wantToCancelUntil !== undefined && wantToCancelUntil !== ob
       if (!(wantToCancelThis && skipAble)) {
         const prom = curFP = f()
-        if (wantToCancelThis && "cancel" in prom) prom.cancel("cancelled by execQueue")
+        curCancelVal = cancelVal
+
+        const localPromsToContinue = [] as AnyPromOrCancProm[]
+        if ("cancel" in prom) {
+          localPromsToContinue.push(prom.onCancel.then(({reason, cancelResult}) => cancelResult))
+          prom.onCancel.then((r) => {
+            cancelDataStore = r
+            p.cancel(r.reason as any)
+            cancelDataStore = undefined
+          })
+          if (wantToCancelThis) prom.cancel(cancelVal)
+        }
 
         p.res(prom)
 
 
-        const localPromsToContinue = [] as AnyPromOrCancProm[]
-        if ("cancel" in prom) localPromsToContinue.push(prom.onCancel.then(({reason, cancelResult}) => cancelResult))
+        const promSettled = "onSettled" in prom ? prom.onSettled : new Promise((res) => {prom.then(res, res)})
 
-        localPromsToContinue.push(prom)
+        localPromsToContinue.push(promSettled)
 
         await Promise.race(localPromsToContinue)
       }
@@ -104,18 +123,26 @@ export function execQueue() {
 
   
 
-  return <T>(f: () => Promise<T> | CancelAblePromise<T, string, string | void | undefined | null | Promise<any>>, canThisBeSkippedCompletelyIfCancelIsRequestedBeforeItStarted = false, cancelPrevIfPossible = false) => {
-    const p = new ResablePromise()
-    const ob = { f, p, skipAble: canThisBeSkippedCompletelyIfCancelIsRequestedBeforeItStarted }
+  return <T, FR extends Promise<T> | CancelAblePromise<T, string, string | void | undefined | null | Promise<any>>>(f: () => FR, options: typeof defaultOptions | boolean = defaultOptions, cancelPrevIfPossible = false): FR  => {
+    options = typeof options === "boolean" ? {...defaultOptions, ...{skipAble: options}} : {...defaultOptions, ...options}
+    const p = new CancelAblePromise<any, any, any>(() => {}, (cVal) => {
+      // on cancel
+
+      if (cancelDataStore !== undefined) return cancelDataStore.cancelResult
+      // if ("cancel" in curFP):  we can assume this as the types restrict it.
+      if (curOb === ob) return (curFP as CancelAblePromise<unknown, unknown>).cancel(cVal)
+      // we can assume that it is still in the list, as it has to be non-resolved to be cancelled (as ensured by CancelAblePromise)
+      queue.splice(queue.indexOf(ob), 1)
+    })
+    const ob = { f, p, skipAble: options.skipAble, cancelVal: options.cancelVal }
     queue.push(ob)
     if (cancelPrevIfPossible && running) {
       wantToCancelUntil = ob
-      if ("cancel" in curFP) curFP.cancel("cancelled by execQueue")
+      if ("cancel" in curFP) curFP.cancel(curCancelVal)
     }
       
     makeSureQueueIsStarted()
-    return p
-
+    return p as any as FR
   }
 }
 
@@ -253,45 +280,52 @@ export class SyncPromise<T = unknown> {
 
 
 
+type SettledPromProps<T> = {settled: boolean, onSettled: Promise<void>, res: (t: T) => void, rej: (err: any) => void}
+type ResablePromProps<T> = {res: (t: T) => void, rej: (err: any) => void}
+type CancelAblePromProps<T, C, CT> = {cancel: (reason: C) => CT, cancelled: boolean, onCancel: Promise<{reason: C, cancelResult: CT}>}
+
+
 const {SettledPromise: _SettledPromise, ResablePromise: _ResablePromise, CancelAblePromise: _CancelAblePromise} = mkExt(Promise)
-export const SettledPromise = _SettledPromise as any as typeof Promise & { new<T = void>(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void): SettledPromise<T> }
-export type SettledPromise<T = void> = Promise<T> & {settled: boolean, onSettled: Promise<void>} & {
+export const SettledPromise = _SettledPromise as any as PromiseConstructor & { new<T = void>(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void): SettledPromise<T> }
+export type SettledPromise<T = unknown> = SettledPromProps<T> & {
   then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): SettledPromise<TResult1 | TResult2>;
   catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): SettledPromise<T | TResult>;
   finally(onfinally?: (() => void) | undefined | null): SettledPromise<T>;
-}
-export const ResablePromise = _ResablePromise as typeof Promise & { new<T = void>(executor?: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void): ResablePromise<T> }
-export type ResablePromise<T = void> = SettledPromise<T> & {res: (t: T) => void, rej: (err: any) => void} & {
+} & Promise<T>
+export const ResablePromise = _ResablePromise as any as PromiseConstructor & { new<T = void>(executor?: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void): ResablePromise<T> }
+export type ResablePromise<T = unknown> = SettledPromProps<T> & ResablePromProps<T> & {
   then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): ResablePromise<TResult1 | TResult2>;
   catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): ResablePromise<T | TResult>;
   finally(onfinally?: (() => void) | undefined | null): ResablePromise<T>;
-}
-export const CancelAblePromise = _CancelAblePromise as any as typeof Promise & { new<T = unknown, C = void>(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, cancel?: (reason: C) => void): CancelAblePromise<T, C> }
-export type CancelAblePromise<T = unknown, C = void, CT = C> = SettledPromise<T> & {cancel: (reason: C) => CT, cancelled: boolean, onCancel: Promise<{reason: C, cancelResult: CT}>} & {
+} & Promise<T>
+export const CancelAblePromise = _CancelAblePromise as any as PromiseConstructor & { new<T = void, C = void, CT = C>(executor?: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, cancel?: (reason: C) => void): CancelAblePromise<T, C, CT> }
+export type CancelAblePromise<T = unknown, C = void, CT = C> = SettledPromProps<T> & ResablePromProps<T> & CancelAblePromProps<T, C, CT> & {
   then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): CancelAblePromise<TResult1 | TResult2>;
   catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): CancelAblePromise<T | TResult>;
   finally(onfinally?: (() => void) | undefined | null): CancelAblePromise<T>;
-}
+} & Promise<T>
 
 const {ResablePromise: _ResableSyncPromise, CancelAblePromise: _CancelAbleSyncPromise, SettledPromise: _SettledSyncPromise} = mkExt(SyncPromise as any)
-export const ResableSyncPromise = _ResableSyncPromise as any as typeof SyncPromise & { new<T = void>(executor?: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void): ResableSyncPromise<T> }
-export type SettledSyncPromise<T = void> = SyncPromise<T> & {settled: boolean, onSettled: Promise<void>} & {
+export const SettledSyncPromise = _SettledSyncPromise as any as typeof SyncPromise & { new<T = void>(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void): SettledSyncPromise<T> }
+export type SettledSyncPromise<T = unknown> = SettledPromProps<T> & {
   then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): SettledSyncPromise<TResult1 | TResult2>;
   catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): SettledSyncPromise<T | TResult>;
   finally(onfinally?: (() => void) | undefined | null): SettledSyncPromise<T>;
-}
-export const CancelAbleSyncPromise = _CancelAbleSyncPromise as any as typeof SyncPromise & { new<T = unknown, C = void>(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, cancel?: (reason: C) => void): CancelAbleSyncPromise<T, C> }
-export type ResableSyncPromise<T = void> = SettledSyncPromise<T> & {res: (t: T) => void, rej: (err: any) => void} & {
+} & SyncPromise<T>
+
+export const ResableSyncPromise = _ResableSyncPromise as any as typeof SyncPromise & { new<T = void>(executor?: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void): ResableSyncPromise<T> }
+export type ResableSyncPromise<T = unknown> = SettledPromProps<T> & ResablePromProps<T> & {
   then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): ResableSyncPromise<TResult1 | TResult2>;
   catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): ResableSyncPromise<T | TResult>;
   finally(onfinally?: (() => void) | undefined | null): ResableSyncPromise<T>;
-}
-export const SettledSyncPromise = _SettledSyncPromise as any as typeof SyncPromise & { new<T = void>(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void): SettledSyncPromise<T> }
-export type CancelAbleSyncPromise<T = unknown, C = void, CT = C> = SettledSyncPromise<T> & {cancel: (reason: C) => CT, cancelled: boolean, onCancel: SyncPromise<{reason: C, cancelResult: CT}>} & {
+} & SyncPromise<T>
+export const CancelAbleSyncPromise = _CancelAbleSyncPromise as any as typeof SyncPromise & { new<T = unknown, C = void, CT = C>(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, cancel?: (reason: C) => void): CancelAbleSyncPromise<T, C, CT> }
+export type CancelAbleSyncPromise<T = unknown, C = void, CT = C> = SettledPromProps<T> & ResablePromProps<T> & CancelAblePromProps<T, C, CT> & {
   then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): CancelAbleSyncPromise<TResult1 | TResult2>;
   catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): CancelAbleSyncPromise<T | TResult>;
   finally(onfinally?: (() => void) | undefined | null): CancelAbleSyncPromise<T>;
-}
+} & SyncPromise<T>
+
 
 
 
@@ -301,8 +335,8 @@ function mkExt(Prom: typeof Promise) {
     public settled: boolean = false
     public onSettled: Promise<void>
 
-    protected res: (t: T | PromiseLike<T>) => void
-    protected rej: (err: any) => void
+    public res: (t: T | PromiseLike<T>) => void
+    public rej: (err: any) => void
   
     constructor(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void) {
 
@@ -342,6 +376,11 @@ function mkExt(Prom: typeof Promise) {
   class ResablePromise<T = void> extends SettledPromise<T> {
     public readonly res: (t: T | PromiseLike<T>) => void
     public readonly rej: (err: any) => void
+
+    constructor(a) {
+      super(a)
+      // todo: deprecate
+    }
   }
   
   
@@ -427,5 +466,4 @@ function mkExt(Prom: typeof Promise) {
 
   return { CancelAblePromise, SettledPromise, ResablePromise }
 }
-
 
