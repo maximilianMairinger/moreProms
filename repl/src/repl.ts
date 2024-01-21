@@ -13,10 +13,46 @@ const time = timoi()
 const q = execQueue()
 
 
-q(() => delay(1000).then(() => console.log("1qwe", time.str())))
-const e = q(() => (delay(1000) as any as CancelAblePromise).then(() => console.log("2qwe")))
-e.then(() => {
-  console.log("2done")
+const p = new CancelAblePromise<void>((res) => {
+  delay(1000).then(() => {
+    console.log("res")
+    res()
+  })
+}, () => {
+  console.log("cancel2")
 })
 
-q(() => delay(1000).then(() => console.log("3qwe", time.str())))
+p.then(() => {
+  console.log("then")
+})
+
+const p2 = p.then(async () => {
+  await delay(1000)
+}, undefined, true)
+
+
+
+p2.cancel()
+
+
+// const p = new Promise<void>((res) => {
+//   delay(1000).then(() => {
+//     console.log("res")
+//     res()
+//   })
+// })
+// p.catch(() => {
+//   console.log("catch")
+// })
+
+
+// const p2 = p.then(async () => {
+
+//   throw new Error("test")
+//   await delay(1000)
+// })
+
+
+
+
+

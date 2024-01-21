@@ -307,7 +307,8 @@ export type ResablePromise<T = unknown> = SettledPromProps<T> & ResablePromProps
 } & Promise<T>
 export const CancelAblePromise = _CancelAblePromise as any as PromiseConstructor & { new<T = void, C = void, CT = C>(executor?: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, cancel?: (reason: C) => void): CancelAblePromise<T, C, CT> }
 export type CancelAblePromise<T = unknown, C = void, CT = C> = SettledPromProps<T> & ResablePromProps<T> & CancelAblePromProps<T, C, CT> & {
-  then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): CancelAblePromise<TResult1 | TResult2>;
+  then<TResult1 = T, TResult2 = never, newC extends C = C, newCT extends CT = CT>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null, onCancel?: true): CancelAblePromise<TResult1 | TResult2, newC, newCT>;
+  then<TResult1 = T, TResult2 = never, newC = void, newCT = newC>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null, onCancel?: (reason: newC) => newCT): CancelAblePromise<TResult1 | TResult2, newC, newCT>;
   catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): CancelAblePromise<T | TResult>;
   finally(onfinally?: (() => void) | undefined | null): CancelAblePromise<T>;
 } & Promise<T>
@@ -328,7 +329,8 @@ export type ResableSyncPromise<T = unknown> = SettledPromProps<T> & ResablePromP
 } & SyncPromise<T>
 export const CancelAbleSyncPromise = _CancelAbleSyncPromise as any as typeof SyncPromise & { new<T = unknown, C = void, CT = C>(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, cancel?: (reason: C) => void): CancelAbleSyncPromise<T, C, CT> }
 export type CancelAbleSyncPromise<T = unknown, C = void, CT = C> = SettledPromProps<T> & ResablePromProps<T> & CancelAblePromProps<T, C, CT> & {
-  then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): CancelAbleSyncPromise<TResult1 | TResult2>;
+  then<TResult1 = T, TResult2 = never, newC extends C = C, newCT extends CT = CT>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null, onCancel?: true): CancelAblePromise<TResult1 | TResult2, newC, newCT>;
+  then<TResult1 = T, TResult2 = never, newC = void, newCT = newC>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null, onCancel?: (reason: newC) => newCT): CancelAbleSyncPromise<TResult1 | TResult2, newC, newCT>;
   catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): CancelAbleSyncPromise<T | TResult>;
   finally(onfinally?: (() => void) | undefined | null): CancelAbleSyncPromise<T>;
 } & SyncPromise<T>
@@ -398,18 +400,18 @@ function mkExt(Prom: typeof Promise) {
     public readonly cancelReason: C
 
     private nestedCancels: Function[] = []
-    constructor(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, cancel?: (reason: C) => CT) {
+    constructor(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, private cancelFunc?: (reason: C) => CT) {
       super(executor)
 
       
       this.cancel = memoize((reason: C) => {
         if (this.settled) return
         (this as any).cancelReason = reason
-        for (const f of this.nestedCancels) f()
+        for (const f of this.nestedCancels) f(reason)
         this.res = () => {}
         this.rej = () => {}
         this.cancelled = true;
-        const cancelResult = cancel !== undefined ? cancel(reason) : undefined
+        const cancelResult = this.cancelFunc !== undefined ? this.cancelFunc(reason) : undefined
         this.onCancel.res({reason, cancelResult})
         return cancelResult
       })
@@ -417,11 +419,26 @@ function mkExt(Prom: typeof Promise) {
 
   
   
-    then<TResult1 = T, TResult2 = never>(
+    then<TResult1 = T, TResult2 = never, newC extends C = C, newCT extends CT = CT>(
       onfulfilled: ((value: T) => TResult1 | PromiseLike<TResult1>) | null | undefined,
-      onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined
-    ): CancelAblePromise<TResult1 | TResult2> {
-      const r = super.then(onfulfilled, onrejected) as any as CancelAblePromise<TResult1 | TResult2>
+      onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined,
+      onCancel?: true
+    ): CancelAblePromise<TResult1 | TResult2, newC, newC>
+    then<TResult1 = T, TResult2 = never, newC = void, newCT = newC>(
+      onfulfilled: ((value: T) => TResult1 | PromiseLike<TResult1>) | null | undefined,
+      onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined,
+      onCancel?: ((reason: newC) => newCT)
+    ): CancelAblePromise<TResult1 | TResult2, newC, newC>
+    then<TResult1 = T, TResult2 = never, newC = void, newCT = newC>(
+      onfulfilled: ((value: T) => TResult1 | PromiseLike<TResult1>) | null | undefined,
+      onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined,
+      onCancel?: ((reason: newC) => newCT) | true
+    ): CancelAblePromise<TResult1 | TResult2, newC, newC> {
+      const r = super.then(onfulfilled, onrejected) as any as CancelAblePromise<TResult1 | TResult2, newC, newC>
+      r.cancelFunc = onCancel === true ? (reason) => {
+        this.nestedCancels.splice(this.nestedCancels.indexOf(r.cancel), 1)
+        this.cancel(reason as any)
+      } : onCancel as any
       this.nestedCancels.push(r.cancel)
       return r
     }
