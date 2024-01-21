@@ -64,11 +64,6 @@ export function latestLatent<Args extends unknown[], Ret>(cb: (...args: Args) =>
 }
 
 
-const q= execQueue()
-q(async () => {
-
-}, {skipAble: undefined})
-
 
 
 export function execQueue(defaultOptions: {
