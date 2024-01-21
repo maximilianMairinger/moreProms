@@ -67,7 +67,7 @@ export function latestLatent<Args extends unknown[], Ret>(cb: (...args: Args) =>
 
 
 export function execQueue(defaultOptions: {
-  skipAble?: boolean,
+  skipAble?: boolean | (() => void),
   cancelVal?: any,
   continueOnError?: boolean
 } = {
@@ -76,7 +76,7 @@ export function execQueue(defaultOptions: {
   continueOnError: true
 }) {
   type AnyPromOrCancProm = Promise<any> | CancelAblePromise<any, string, string | void | undefined | null | Promise<any>>
-  const queue = [] as {skipAble: boolean, p: CancelAblePromise<any>, f: () => AnyPromOrCancProm, cancelVal: any}[]
+  const queue = [] as {skipAble: boolean | (() => void), p: CancelAblePromise<any>, f: () => AnyPromOrCancProm, cancelVal: any}[]
   let curFP: AnyPromOrCancProm
   let curCancelVal: any
   let running = false
@@ -95,7 +95,11 @@ export function execQueue(defaultOptions: {
       if (wantToCancelUntil === ob) wantToCancelUntil = undefined
       const wantToCancelThis = wantToCancelUntil !== undefined
 
-      if (!(wantToCancelThis && skipAble)) {
+
+      if (wantToCancelThis && skipAble) {
+        if (skipAble instanceof Function) skipAble()
+      }
+      else {
         const prom = curFP = f()
         curCancelVal = cancelVal
 
@@ -130,8 +134,8 @@ export function execQueue(defaultOptions: {
 
   
 
-  return <T, FR extends Promise<T> | CancelAblePromise<T, string, string | void | undefined | null | Promise<any>>>(f: () => FR, options: typeof defaultOptions | boolean = defaultOptions, cancelPrevIfPossible = false): FR  => {
-    options = typeof options === "boolean" ? {...defaultOptions, ...{skipAble: options}} : {...defaultOptions, ...options}
+  return <T, FR extends Promise<T> | CancelAblePromise<T, string, string | void | undefined | null | Promise<any>>>(f: () => FR, options: typeof defaultOptions | boolean | (() => void) = defaultOptions, cancelPrevIfPossible = false): FR  => {
+    options = typeof options !== "object" ? {...defaultOptions, ...{skipAble: options}} : {...defaultOptions, ...options}
     const p = new CancelAblePromise<any, any, any>(() => {}, (cVal) => {
       // on cancel
 
