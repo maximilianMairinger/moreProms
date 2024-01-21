@@ -76,7 +76,7 @@
   "dependencies": {
     "colorful-cli-logger": "^1.0.0",
     "commander": "^10.0.1",
-    "key-index": "^1.4.18",
+    "key-index": "^1.7.0",
     "req-package-json": "^2.1.2"
   }
 }

@@ -404,16 +404,17 @@ function mkExt(Prom: typeof Promise) {
       super(executor)
 
       
-      this.cancel = memoize((reason: C) => {
+      this.cancel = memoize((reason) => {
         if (this.settled) return
         (this as any).cancelReason = reason
-        for (const f of this.nestedCancels) f(reason)
         this.res = () => {}
         this.rej = () => {}
         this.cancelled = true;
         const cancelResult = this.cancelFunc !== undefined ? this.cancelFunc(reason) : undefined
         this.onCancel.res({reason, cancelResult})
         return cancelResult
+      }, (reason) => {
+        for (const f of this.nestedCancels) f(reason)
       })
     }
 
