@@ -66,7 +66,10 @@ export function latestLatent<Args extends unknown[], Ret>(cb: (...args: Args) =>
 
 
 
-export function execQueue(defaultOptions = {
+export function execQueue(defaultOptions: {
+  skipAble?: boolean,
+  cancelVal?: any
+} = {
   skipAble: false,
   cancelVal: "cancelled by execQueue"
 }) {
