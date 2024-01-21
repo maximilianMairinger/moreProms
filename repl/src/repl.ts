@@ -19,7 +19,7 @@ const p = new CancelAblePromise<void>((res) => {
     res()
   })
 }, () => {
-  console.log("cancel2")
+  console.log("cancel1")
 })
 
 p.then(() => {
@@ -28,7 +28,9 @@ p.then(() => {
 
 const p2 = p.then(async () => {
   await delay(1000)
-}, undefined, true)
+}, undefined, () => {
+  p.cancel()
+})
 
 
 
