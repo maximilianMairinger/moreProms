@@ -64,14 +64,21 @@ export function latestLatent<Args extends unknown[], Ret>(cb: (...args: Args) =>
 }
 
 
+const q= execQueue()
+q(async () => {
+
+}, {skipAble: undefined})
+
 
 
 export function execQueue(defaultOptions: {
   skipAble?: boolean,
-  cancelVal?: any
+  cancelVal?: any,
+  continueOnError?: boolean
 } = {
   skipAble: false,
-  cancelVal: "cancelled by execQueue"
+  cancelVal: "cancelled by execQueue",
+  continueOnError: true
 }) {
   type AnyPromOrCancProm = Promise<any> | CancelAblePromise<any, string, string | void | undefined | null | Promise<any>>
   const queue = [] as {skipAble: boolean, p: CancelAblePromise<any>, f: () => AnyPromOrCancProm, cancelVal: any}[]
@@ -82,7 +89,7 @@ export function execQueue(defaultOptions: {
   let curOb: any
   let cancelDataStore: {cancelResult: any} | undefined
 
-  async function makeSureQueueIsStarted() {
+  async function makeSureQueueIsStarted(options: typeof defaultOptions) {
     if (running) return
     running = true
 
@@ -111,7 +118,7 @@ export function execQueue(defaultOptions: {
         p.res(prom)
 
 
-        const promSettled = "onSettled" in prom ? prom.onSettled : new Promise((res) => {prom.then(res, res)})
+        const promSettled = !options.continueOnError ? prom  : "onSettled" in prom ? prom.onSettled : new Promise((res) => {prom.then(res, res)})
 
         localPromsToContinue.push(promSettled)
 
@@ -146,7 +153,7 @@ export function execQueue(defaultOptions: {
       if ("cancel" in curFP) curFP.cancel(curCancelVal)
     }
       
-    makeSureQueueIsStarted()
+    makeSureQueueIsStarted(options)
     return p as any as FR
   }
 }
