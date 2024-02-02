@@ -148,6 +148,7 @@ export function execQueue(defaultOptions: {
     const ob = { f, p, skipAble: options.skipAble, cancelVal: options.cancelVal }
     queue.push(ob)
     if (cancelPrevIfPossible && running) {
+      // todo is this max even needed? Is ob not always the latests here?...
       wantToCancelUntil = wantToCancelUntil === undefined ? ob : queue[Math.max(queue.indexOf(wantToCancelUntil), queue.indexOf(ob))]
       if ("cancel" in curFP) curFP.cancel(curCancelVal)
     }
@@ -395,17 +396,26 @@ function mkExt(Prom: typeof Promise) {
       // todo: deprecate
     }
   }
-  
+  type CancelFunc<C, CT> = (reason: C) => CT
   
   class CancelAblePromise<T = unknown, C = void, CT = C> extends SettledPromise<T> {
     public cancelled: boolean = false
     public cancel: (reason: C) => CT
     public onCancel: ResablePromise<{reason: C, cancelResult: CT | undefined}> = new ResablePromise(() => {})
     public readonly cancelReason: C
+    private cancelFunc: CancelFunc<C, CT>
 
     private nestedCancels: Function[] = []
-    constructor(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, private cancelFunc?: (reason: C) => CT) {
-      super(executor)
+
+    constructor(executor: (resolve: (value: T | PromiseLike<T>) => (void | CancelFunc<C, CT>), reject: (reason?: any) => void) => void)
+    constructor(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, cancelFunc?: CancelFunc<C, CT>)
+    constructor(executor: (resolve: (value: T | PromiseLike<T>) => (void | CancelFunc<C, CT>), reject: (reason?: any) => void) => void, cancelFunc?: CancelFunc<C, CT>) {
+      super((res, rej) => {
+        const r = executor(res, rej)
+        if (cancelFunc === undefined) cancelFunc = r as any
+      })
+
+      this.cancelFunc = cancelFunc
 
       
       this.cancel = memoize((reason) => {
