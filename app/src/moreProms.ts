@@ -357,6 +357,11 @@ function mkExt(Prom: typeof Promise) {
 
       let res: any
       let rej: any
+
+      let resSettled: Function
+      const onSettled = new Prom<void>((res) => {
+        resSettled = res
+      }) as any
       
       super(!finallyInit ? (r, rj) => {
         res = r
@@ -378,10 +383,8 @@ function mkExt(Prom: typeof Promise) {
       this.res = res
       this.rej = rej
   
-      let resSettled: Function
-      this.onSettled = new Prom<void>((res) => {
-        resSettled = res
-      }) as any
+      
+      this.onSettled = onSettled
     }
   }
   
