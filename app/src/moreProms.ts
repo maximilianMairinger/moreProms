@@ -117,7 +117,7 @@ export function execQueue(defaultOptions: {
         p.res(prom)
 
 
-        const promSettled = !options.continueOnError ? prom  : "onSettled" in prom ? prom.onSettled : new Promise((res) => {prom.then(res, res)})
+        const promSettled = !options.continueOnError ? prom  : "onSettled" in prom ? prom.onSettled : prom.finally()
 
         localPromsToContinue.push(promSettled)
 
@@ -347,7 +347,7 @@ function mkExt(Prom: typeof Promise) {
   let finallyInit = false
   class SettledPromise<T = void> extends Prom<T> {
     public settled: boolean = false
-    public onSettled: Promise<void>
+    
 
     public res: (t: T | PromiseLike<T>) => void
     public rej: (err: any) => void
@@ -357,24 +357,15 @@ function mkExt(Prom: typeof Promise) {
 
       let res: any
       let rej: any
-
-      let resSettled: Function
-      const onSettled = new Prom<void>((res) => {
-        resSettled = res
-      }) as any
       
       super(!finallyInit ? (r, rj) => {
         res = r
         rej = rj
   
         if (executor) executor((a) => {
-          resSettled()
-          this.settled = true
           if (this.res !== undefined) this.res(a)
           else r(a)
         }, (a) => {
-          resSettled()
-          this.settled = true
           if (this.rej !== undefined) this.rej(a)
           else rj(a)
         })
@@ -382,9 +373,10 @@ function mkExt(Prom: typeof Promise) {
   
       this.res = res
       this.rej = rej
-  
-      
-      this.onSettled = onSettled
+    }
+
+    get onSettled(): Promise<any> {
+      return this.finally()
     }
   }
   
