@@ -410,12 +410,12 @@ function mkExt(Prom: typeof Promise) {
 
     private nestedCancels: Function[] = []
 
-    constructor(executor: (resolve: (value: T | PromiseLike<T>) => (void | CancelFunc<C, CT>), reject: (reason?: any) => void) => void)
+    constructor(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => (void | CancelFunc<C, CT>))
     constructor(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, cancelFunc?: CancelFunc<C, CT>)
-    constructor(executor: (resolve: (value: T | PromiseLike<T>) => (void | CancelFunc<C, CT>), reject: (reason?: any) => void) => void, cancelFunc?: CancelFunc<C, CT>) {
+    constructor(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => (void | CancelFunc<C, CT>), cancelFunc?: CancelFunc<C, CT>) {
       super((res, rej) => {
         const r = executor(res, rej)
-        if (cancelFunc === undefined) cancelFunc = r as any
+        if (cancelFunc === undefined && r instanceof Function) cancelFunc = r as any
       })
 
       this.cancelFunc = cancelFunc
