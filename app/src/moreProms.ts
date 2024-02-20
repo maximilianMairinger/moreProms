@@ -212,7 +212,7 @@ export class SyncPromise<T = unknown> {
     if (this.status === "resolved") return SyncPromise.resolve(to(this.resVal))
     else if (this.status === "pending") {
       
-      return this.constructor((res, rej) => {
+      return new (this as any).constructor((res, rej) => {
         if (onCatch) this.catchListener.push({res, f: onCatch})
         this.thenListener.push({res, rej, f: to})
       })
@@ -223,7 +223,7 @@ export class SyncPromise<T = unknown> {
   catch<R = never>(to: ((err: any) => R | PromiseLike<R>) | null | undefined): PromiseLike<R | T> {
     if (!to) return this
     if (this.status === "pending") {
-      return this.constructor((res) => {
+      return new (this as any).constructor((res) => {
         this.catchListener.push({res, f: to})
       })
     }
@@ -232,7 +232,7 @@ export class SyncPromise<T = unknown> {
   finally(to: (() => void) | undefined | null): SyncPromise<T> {
     if (!to) return this
     if (this.status === "pending") {
-      return this.constructor((res) => {
+      return new (this as any).constructor((res) => {
         this.catchListener.push({res, f: to})
         this.thenListener.push({res, rej: res, f: to})
       })
