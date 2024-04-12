@@ -12,7 +12,7 @@ export function latestLatent<Args extends unknown[], Ret>(cb: (...args: Args) =>
   function request(...args: Args) {
     prom.cancel()
     const r = cb(...args) 
-    prom = r instanceof CancelAblePromise ? r as CancelAblePromise<Ret> : new CancelAblePromise<Ret>((res, rej) => { r.then(res, rej) }, () => {})
+    prom = r instanceof CancelAblePromise ? r as CancelAblePromise<Ret> : new CancelAblePromise<Ret>((res, rej) => { (r as Promise<any>).then(res, rej) }, () => {})
     lastPromHasUpdated(futures, prom)
     // console.log("callingVesselProm", callingPromUID)
     return callingPromUID === undefined ? prom : uidToProm.get(callingPromUID)
