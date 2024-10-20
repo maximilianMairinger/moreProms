@@ -14,27 +14,32 @@ const q = execQueue()
 
 
 const p = new CancelAblePromise<void>((res) => {
-  delay(1000).then(() => {
+  
+  res(delay(1000).then(() => {
     console.log("res")
-    res()
-  })
-}, () => {
-  console.log("cancel1")
-})
+  }))
+  
 
-p.then(() => {
+  return () => {
+    console.log("cancel1")
+  }
+}).then(() => {
   console.log("then")
 })
 
-const p2 = p.then(async () => {
-  await delay(1000)
-}, undefined, () => {
-  p.cancel()
-})
+// p.then(() => {
+//   console.log("then")
+// })
+
+// const p2 = p.then(async () => {
+//   await delay(1000)
+// }, undefined, () => {
+//   p.cancel()
+// })
 
 
 
-p2.cancel()
+// p2.cancel()
 
 
 // const p = new Promise<void>((res) => {

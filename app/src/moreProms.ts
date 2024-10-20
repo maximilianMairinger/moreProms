@@ -365,13 +365,7 @@ function mkExt(Prom: typeof Promise) {
         res = r
         rej = rj
   
-        if (executor) executor((a) => {
-          if (this.res !== undefined) this.res(a)
-          else r(a)
-        }, (a) => {
-          if (this.rej !== undefined) this.rej(a)
-          else rj(a)
-        })
+        if (executor) executor(r, rj)
       } : executor)
   
       this.res = res
