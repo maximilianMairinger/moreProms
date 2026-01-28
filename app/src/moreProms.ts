@@ -4,6 +4,7 @@ import { memoize } from "key-index"
 type P<Args extends unknown[], Ret> = {
   then<TResult1 = Ret, TResult2 = never>(onfulfilled?: ((value: Ret) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): P<Args, TResult1 | TResult2>
   catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): P<Args, Ret | TResult>;
+  abort(reason?: any): void
 } & ((...a: Args) => (CancelAblePromise<Ret> | Promise<Ret> | undefined))
 
 export function latestLatent<Args extends unknown[], Ret>(cb: (...args: Args) => (CancelAblePromise<Ret> | Promise<Ret> | undefined)): P<Args, Ret> {
@@ -16,6 +17,10 @@ export function latestLatent<Args extends unknown[], Ret>(cb: (...args: Args) =>
     lastPromHasUpdated(futures, prom)
     // console.log("callingVesselProm", callingPromUID)
     return callingPromUID === undefined ? prom : uidToProm.get(callingPromUID)
+  }
+
+  (request as any).abort = (reason?: any) => {
+    prom.cancel(reason)
   }
 
   function lastPromHasUpdated(futures: Future, prom: any) {
@@ -43,6 +48,9 @@ export function latestLatent<Args extends unknown[], Ret>(cb: (...args: Args) =>
         const r = (request as any)(...a)
         callingPromUID = undefined
         return r
+      }
+      ;(nxtVessel as any).abort = (reason?: any) => {
+        (request as any).abort(reason)
       }
       uidToProm.set(nxtVessel, prom)
       future.push({func, args, deeper, uid: nxtVessel})
