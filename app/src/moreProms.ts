@@ -9,11 +9,12 @@ type P<Args extends unknown[], Ret> = {
 
 export function latestLatent<Args extends unknown[], Ret>(cb: (...args: Args) => (CancelAblePromise<Ret> | Promise<Ret> | undefined)): P<Args, Ret> {
   let prom = new CancelAblePromise<Ret>(() => {}, () => {})
-  
   function request(...args: Args) {
     prom.cancel()
     const r = cb(...args) 
-    prom = r instanceof CancelAblePromise ? r as CancelAblePromise<Ret> : new CancelAblePromise<Ret>((res, rej) => { (r as Promise<any>).then(res, rej) }, () => {})
+    prom = r instanceof CancelAblePromise ? r as CancelAblePromise<Ret> : new CancelAblePromise<Ret>((res, rej) => { (r as Promise<any>).then(res, rej) }, () => {
+      
+    })
     lastPromHasUpdated(futures, prom)
     // console.log("callingVesselProm", callingPromUID)
     return callingPromUID === undefined ? prom : uidToProm.get(callingPromUID)
@@ -410,20 +411,43 @@ function mkExt(Prom: typeof Promise) {
     constructor(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => (void | CancelFunc<C, CT>))
     constructor(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, cancelFunc?: CancelFunc<C, CT>)
     constructor(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => (void | CancelFunc<C, CT>), cancelFunc?: CancelFunc<C, CT>) {
+      let isCancelled = false
+      
       super((res, rej) => {
-        const r = executor(res, rej)
+        // Wrap the callbacks to check cancellation status
+        const wrappedRes = (value: T | PromiseLike<T>) => {
+          // If value is a thenable (promise), wait for it to resolve and then check cancellation. Duck typing here, see promise spec
+          if (value != null && typeof (value as any).then === 'function') {
+            (value as PromiseLike<T>).then(
+              (resolved) => {
+                if (!isCancelled) res(resolved as any)
+              },
+              (rejected) => {
+                if (!isCancelled) rej(rejected)
+              }
+            )
+          } else {
+            // Synchronous value - check immediately
+            if (!isCancelled) res(value)
+          }
+        }
+        const wrappedRej = (reason: any) => {
+          if (!isCancelled) rej(reason)
+        }
+        
+        const r = executor(wrappedRes, wrappedRej)
         if (cancelFunc === undefined && r instanceof Function) cancelFunc = r as any
       })
 
       this.cancelFunc = cancelFunc
 
       
-      this.cancel = memoize((reason) => {
+      this.cancel = memoize((reason: C) => {
         if (this.settled) return
-        (this as any).cancelReason = reason
+        this.cancelled = isCancelled = true
+        ;(this as any).cancelReason = reason
         this.res = () => {}
         this.rej = () => {}
-        this.cancelled = true;
         const cancelResult = this.cancelFunc !== undefined ? this.cancelFunc(reason) : undefined
         this.onCancel.res({reason, cancelResult})
         return cancelResult
