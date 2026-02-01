@@ -174,7 +174,7 @@ export type CancelAblePromise<T = unknown, C = void, CT = C> = SettledPromProps<
 } & Promise<T>
 
 interface CancelAblePromiseConstructor {
-  new<T = void, C = void, CT = C>(executor?: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => (CancelFunc<C, CT> | void), cancel?: (reason: C) => void): CancelAblePromise<T, C, CT>;
+  new<T = void, C = void, CT = C>(executor?: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => (CancelFunc<C, CT> | any), cancel?: (reason: C) => void): CancelAblePromise<T, C, CT>;
   prototype: CancelAblePromise;
 }
 
@@ -214,13 +214,21 @@ export type CancelAbleSyncPromise<T = unknown, C = void, CT = C> = SettledPromPr
 } & SyncPromise<T>
 
 interface CancelAbleSyncPromiseConstructor {
-  new<T = unknown, C = void, CT = C>(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, cancel?: (reason: C) => void): CancelAbleSyncPromise<T, C, CT>
+  new<T = unknown, C = void, CT = C>(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => (CancelFunc<C, CT> | any), cancel?: (reason: C) => void): CancelAbleSyncPromise<T, C, CT>
   prototype: CancelAbleSyncPromise;
 }
 
 export const CancelAbleSyncPromise: CancelAbleSyncPromiseConstructor = _CancelAbleSyncPromise as any;
 
 
+
+function isPromiseDuckType(p: any): p is PromiseLike<any> {
+  return p != null && typeof p.then === 'function'
+}
+
+function isCancelAblePromiseDuckType(p: any): p is CancelAblePromise<any, any, any> {
+  return isPromiseDuckType(p) && typeof (p as any).cancel === 'function'
+}
 
 
 function mkExt(Prom: typeof Promise) {
@@ -238,27 +246,26 @@ function mkExt(Prom: typeof Promise) {
       let rej: any
       
       super((r, rj) => {
-        res = r
-        rej = rj
+        res = (a) => {
+          this.settled = true
+          r(a)
+        }
+        rej = (a) => {
+          this.settled = true
+          rj(a)
+        }
   
-        if (executor) executor(r, rj)
+        if (executor) executor(res, rej)
       })
   
       this.res = res
       this.rej = rej
-      
-      // Set settled to true when promise settles - use Promise.prototype to avoid recursion
-      if (!finallyInit) {
-        finallyInit = true
-        this.onSettled.then(() => {
-          this.settled = true
-        })
-        finallyInit = false
-      }
     }
 
     get onSettled(): Promise<any> {
-      return this.finally()
+      return new Promise((res) => {
+        this.finally().then(res, res)
+      })
     }
   }
   
@@ -293,7 +300,7 @@ function mkExt(Prom: typeof Promise) {
         // Wrap the callbacks to check cancellation status
         const wrappedRes = (value: T | PromiseLike<T>) => {
           // If value is a thenable (promise), wait for it to resolve and then check cancellation. Duck typing here, see promise spec
-          if (value != null && typeof (value as any).then === 'function') {
+          if (isPromiseDuckType(value)) {
             (value as PromiseLike<T>).then(
               (resolved) => {
                 if (!isCancelled) res(resolved as any)
@@ -332,6 +339,13 @@ function mkExt(Prom: typeof Promise) {
       })
     }
 
+    // only add something here if you know what you are doing. By default this promise handles downwards cancellation flow (so 
+    // everything chained to this promise will be cancelled with it). NOT upwards (so cancelling a child promise will NOT cancel 
+    // this parent promise).
+    protected addNestedCancel(f: Function) {
+      this.nestedCancels.push(f)
+    }
+
   
   
     then<TResult1 = T, TResult2 = never, newC extends C = C, newCT extends CT = CT>(
@@ -349,7 +363,15 @@ function mkExt(Prom: typeof Promise) {
       onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined,
       onCancel?: ((reason: newC) => newCT) | true
     ): CancelAblePromise<TResult1 | TResult2, newC, newC> {
-      const r = super.then(onfulfilled, onrejected) as any as CancelAblePromise<TResult1 | TResult2, newC, newC>
+      const r = super.then((a) => {
+        const ret = onfulfilled(a)
+        if (isCancelAblePromiseDuckType(ret)) this.nestedCancels.push(ret.cancel)
+        return ret
+      }, onrejected ? (reason) => {
+        const ret = onrejected(reason)
+        if (isCancelAblePromiseDuckType(ret)) this.nestedCancels.push(ret.cancel)
+        return ret
+      } : undefined) as any as CancelAblePromise<TResult1 | TResult2, newC, newC>
       r.cancelFunc = onCancel === true ? (reason) => {
         this.nestedCancels.splice(this.nestedCancels.indexOf(r.cancel), 1)
         this.cancel(reason as any)
