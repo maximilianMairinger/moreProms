@@ -5,7 +5,7 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 describe("SettledPromise", () => {
   
   test("settled property starts false and becomes true", async () => {
-    const promise = new SettledPromise((resolve) => {
+    const promise = new SettledPromise<string>((resolve) => {
       setTimeout(() => {
         resolve("Hello, world!")
       }, 100)
