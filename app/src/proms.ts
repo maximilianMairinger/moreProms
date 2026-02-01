@@ -139,22 +139,33 @@ type CancelAblePromProps<T, C, CT> = {cancel: (reason: C) => CT, cancelled: bool
 
 
 const {SettledPromise: _SettledPromise, ResablePromise: _ResablePromise, CancelAblePromise: _CancelAblePromise} = mkExt(Promise)
-export const SettledPromise = _SettledPromise as unknown as PromiseConstructor & { new<T = void>(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void): SettledPromise<T> }
+
+interface SettledPromiseConstructor {
+  new<T = void>(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void): SettledPromise<T>;
+  prototype: SettledPromise;
+}
+
+export const SettledPromise: SettledPromiseConstructor = _SettledPromise as any;
 export type SettledPromise<T = unknown> = SettledPromProps<T> & {
   then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): SettledPromise<TResult1 | TResult2>;
   catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): SettledPromise<T | TResult>;
   finally(onfinally?: (() => void) | undefined | null): SettledPromise<T>;
 } & Promise<T>
-export const ResablePromise = _ResablePromise as unknown as PromiseConstructor & { new<T = void>(executor?: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void): ResablePromise<T> }
 export type ResablePromise<T = unknown> = SettledPromProps<T> & ResablePromProps<T> & {
   then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): ResablePromise<TResult1 | TResult2>;
   catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): ResablePromise<T | TResult>;
   finally(onfinally?: (() => void) | undefined | null): ResablePromise<T>;
 } & Promise<T>
 
+interface ResablePromiseConstructor {
+  new<T = void>(executor?: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void): ResablePromise<T>;
+  prototype: ResablePromise;
+}
+
+export const ResablePromise: ResablePromiseConstructor = _ResablePromise as any;
+
 export type CancelFunc<C, CT> = (reason: C) => CT
 
-export const CancelAblePromise = _CancelAblePromise as unknown as PromiseConstructor & { new<T = void, C = void, CT = C>(executor?: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => (CancelFunc<C, CT> | void), cancel?: (reason: C) => void): CancelAblePromise<T, C, CT> }
 export type CancelAblePromise<T = unknown, C = void, CT = C> = SettledPromProps<T> & ResablePromProps<T> & CancelAblePromProps<T, C, CT> & {
   then<TResult1 = T, TResult2 = never, newC extends C = C, newCT extends CT = CT>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null, onCancelForward?: true): CancelAblePromise<TResult1 | TResult2, newC, newCT>;
   then<TResult1 = T, TResult2 = never, newC = void, newCT = newC>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null, onCancel?: (reason: newC) => newCT): CancelAblePromise<TResult1 | TResult2, newC, newCT>;
@@ -162,27 +173,52 @@ export type CancelAblePromise<T = unknown, C = void, CT = C> = SettledPromProps<
   finally(onfinally?: (() => void) | undefined | null): CancelAblePromise<T>;
 } & Promise<T>
 
+interface CancelAblePromiseConstructor {
+  new<T = void, C = void, CT = C>(executor?: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => (CancelFunc<C, CT> | void), cancel?: (reason: C) => void): CancelAblePromise<T, C, CT>;
+  prototype: CancelAblePromise;
+}
+
+export const CancelAblePromise: CancelAblePromiseConstructor = _CancelAblePromise as any;
+
 const {ResablePromise: _ResableSyncPromise, CancelAblePromise: _CancelAbleSyncPromise, SettledPromise: _SettledSyncPromise} = mkExt(SyncPromise as any)
-export const SettledSyncPromise = _SettledSyncPromise as any as typeof SyncPromise & { new<T = void>(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void): SettledSyncPromise<T> }
 export type SettledSyncPromise<T = unknown> = SettledPromProps<T> & {
   then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): SettledSyncPromise<TResult1 | TResult2>;
   catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): SettledSyncPromise<T | TResult>;
   finally(onfinally?: (() => void) | undefined | null): SettledSyncPromise<T>;
 } & SyncPromise<T>
+interface SettledSyncPromiseConstructor {
+  new<T = void>(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void): SettledSyncPromise<T>
+  prototype: SettledSyncPromise;
+}
 
-export const ResableSyncPromise = _ResableSyncPromise as any as typeof SyncPromise & { new<T = void>(executor?: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void): ResableSyncPromise<T> }
+export const SettledSyncPromise: SettledSyncPromiseConstructor = _SettledSyncPromise as any;
+
 export type ResableSyncPromise<T = unknown> = SettledPromProps<T> & ResablePromProps<T> & {
   then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): ResableSyncPromise<TResult1 | TResult2>;
   catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): ResableSyncPromise<T | TResult>;
   finally(onfinally?: (() => void) | undefined | null): ResableSyncPromise<T>;
 } & SyncPromise<T>
-export const CancelAbleSyncPromise = _CancelAbleSyncPromise as any as typeof SyncPromise & { new<T = unknown, C = void, CT = C>(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, cancel?: (reason: C) => void): CancelAbleSyncPromise<T, C, CT> }
+interface ResableSyncPromiseConstructor {
+  new<T = void>(executor?: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void): ResableSyncPromise<T>
+  prototype: ResableSyncPromise;
+}
+
+export const ResableSyncPromise: ResableSyncPromiseConstructor = _ResableSyncPromise as any;
+
+
 export type CancelAbleSyncPromise<T = unknown, C = void, CT = C> = SettledPromProps<T> & ResablePromProps<T> & CancelAblePromProps<T, C, CT> & {
   then<TResult1 = T, TResult2 = never, newC extends C = C, newCT extends CT = CT>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null, onCancelForward?: true): CancelAblePromise<TResult1 | TResult2, newC, newCT>;
   then<TResult1 = T, TResult2 = never, newC = void, newCT = newC>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null, onCancel?: (reason: newC) => newCT): CancelAbleSyncPromise<TResult1 | TResult2, newC, newCT>;
   catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): CancelAbleSyncPromise<T | TResult>;
   finally(onfinally?: (() => void) | undefined | null): CancelAbleSyncPromise<T>;
 } & SyncPromise<T>
+
+interface CancelAbleSyncPromiseConstructor {
+  new<T = unknown, C = void, CT = C>(executor: (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: any) => void) => void, cancel?: (reason: C) => void): CancelAbleSyncPromise<T, C, CT>
+  prototype: CancelAbleSyncPromise;
+}
+
+export const CancelAbleSyncPromise: CancelAbleSyncPromiseConstructor = _CancelAbleSyncPromise as any;
 
 
 
