@@ -230,6 +230,25 @@ function isCancelAblePromiseDuckType(p: any): p is CancelAblePromise<any, any, a
   return isPromiseDuckType(p) && typeof (p as any).cancel === 'function'
 }
 
+const cancelableAwaitWarned = new WeakSet<object>()
+function shouldWarnCancelableAwait(onfulfilled: any, onrejected: any, onCancel: any) {
+  if (onCancel !== undefined) return false
+  if (typeof onfulfilled !== "function" || typeof onrejected !== "function") return false
+  const isNative = (fn: Function) => Function.prototype.toString.call(fn).includes("[native code]")
+  const nameLike = (fn: Function, name: string) => fn.name === name || fn.name === ""
+  return isNative(onfulfilled) && isNative(onrejected) && (nameLike(onfulfilled, "resolve") || nameLike(onrejected, "reject"))
+}
+function warnIfCancelableAwait(prom: object, onfulfilled: any, onrejected: any, onCancel: any) {
+  if (cancelableAwaitWarned.has(prom)) return
+  if (!shouldWarnCancelableAwait(onfulfilled, onrejected, onCancel)) return
+  cancelableAwaitWarned.add(prom)
+  // eslint-disable-next-line no-console
+  console.warn(
+    "CancelAblePromise was wrapped by a native Promise (likely via async/await), which drops cancellation. " +
+      "Return the CancelAblePromise directly or avoid async/await when you need cancellation."
+  )
+}
+
 
 function mkExt(Prom: typeof Promise) {
   let finallyInit = false
@@ -363,6 +382,7 @@ function mkExt(Prom: typeof Promise) {
       onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined,
       onCancel?: ((reason: newC) => newCT) | true
     ): CancelAblePromise<TResult1 | TResult2, newC, newC> {
+      warnIfCancelableAwait(this, onfulfilled, onrejected, onCancel)
       const r = super.then((a) => {
         const ret = onfulfilled(a)
         if (isCancelAblePromiseDuckType(ret)) this.nestedCancels.push(ret.cancel)
