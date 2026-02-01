@@ -208,6 +208,39 @@ hello().then((w) => {
 ```
 
 
+You can also nest them, also conditionally:
+
+```ts
+const onTrue = latestLatent(async () => {
+  ...
+})
+
+const onFalse = latestLatent(async () => {
+  ...
+})
+
+latestLatent((trueOrFalse) => {
+  if (trueOrFalse) return onTrue()
+  else return onFalse()
+})
+```
+
+You can also abort a call without triggering a new one:
+
+```ts
+const hello = latestLatent(async () => {
+  await delay(100)
+  return "hello"
+}).then((w) => {
+  return w + " world"
+})
+
+hello()
+await delay(50)
+hello.abort()
+```
+
+
 ## Contribute
 
 All feedback is appreciated. Create a pull request or write an issue.
