@@ -296,7 +296,7 @@ function mkExt(Prom: typeof Promise) {
     private catchChildProms = []
     then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): Promise<TResult1 | TResult2> {
       const r = super.then(onfulfilled) as any
-      this.catch(onrejected) // I am not sure if this is 100% spec compliant, but it seems like a super edge case. Only thing where this would be different is when we throw in the catch clause, then we dont propagate to the returned promise directly. But who does that...
+      if (onrejected instanceof Function) this.catch(onrejected) // I am not sure if this is 100% spec compliant, but it seems like a super edge case. Only thing where this would be different is when we throw in the catch clause, then we dont propagate to the returned promise directly. But who does that...
       if (this.settled) return r
       this.thenChildProms.push(r)
       return r
