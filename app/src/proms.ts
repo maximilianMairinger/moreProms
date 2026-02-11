@@ -277,14 +277,35 @@ function mkExt(Prom: typeof Promise) {
         if (executor) executor(res, rej)
       })
   
-      this.res = res
-      this.rej = rej
+      this.res = (arg) => {
+        res(arg)
+        return Promise.all(this.thenChildProms)
+      }
+      this.rej = async (arg) => {
+        rej(arg)
+        await Promise.all(this.catchChildProms)
+      }
     }
 
     get onSettled(): Promise<any> {
       return new Promise((res) => {
         this.finally().then(res, res)
       })
+    }
+    private thenChildProms = []
+    private catchChildProms = []
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): Promise<TResult1 | TResult2> {
+      const r = super.then(onfulfilled) as any
+      this.catch(onrejected) // I am not sure if this is 100% spec compliant, but it seems like a super edge case. Only thing where this would be different is when we throw in the catch clause, then we dont propagate to the returned promise directly. But who does that...
+      if (this.settled) return r
+      this.thenChildProms.push(r)
+      return r
+    }
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): Promise<T | TResult> {
+      const r = super.catch(onrejected) as any
+      if (this.settled) return r
+      this.catchChildProms.push(r)
+      return r
     }
   }
   
