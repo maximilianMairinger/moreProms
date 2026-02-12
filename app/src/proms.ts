@@ -1,128 +1,229 @@
 import { memoize } from "key-index"
 
+type ResolveFn<T> = (value?: T | PromiseLike<T>) => void;
+type RejectFn = (reason?: any) => void;
 
-export class SyncPromise<T = unknown> {
-  private thenListener: {f: (res: T) => unknown, res: Function, rej: Function}[] = []
-  private catchListener: {f: (res: T) => unknown, res: Function}[] = []
+interface Handler<T, R> {
+  onFulfilled?: ((value: T) => R | PromiseLike<R>) | null;
+  onRejected?: ((reason: any) => R | PromiseLike<R>) | null;
+  resolve: ResolveFn<R>;
+  reject: RejectFn;
+}
 
-  private status = "pending" as "pending" | "resolved" | "rejected"
-  private resVal: T
+export class SyncPromise<T = unknown> implements PromiseLike<T> {
+  private state: "pending" | "fulfilled" | "rejected" = "pending";
+  private value: any; // Stores the result or the error
+  private handlers: Handler<T, any>[] = [];
 
-
-
-  private duringConstructor: boolean
-  constructor(cb: (res: (res?: T | PromiseLike<T>) => void, rej: (reason: any) => void) => void) {
-    this.duringConstructor = true
-    cb(this._res.bind(this), this._rej.bind(this))
-    this.duringConstructor = false
-  }
-
-  private _res(val: T | SyncPromise<T>) {
-    if (this.status !== "pending") return
-    if (val instanceof SyncPromise) {
-      val.then(this._res.bind(this), this._rej.bind(this))
-      return
+  constructor(executor: (resolve: ResolveFn<T>, reject: RejectFn) => void) {
+    try {
+      executor(this._resolve.bind(this), this._reject.bind(this));
+    } catch (err) {
+      this._reject(err);
     }
-    for (const {f, res} of this.thenListener) {
-      const resVal = f(val)
-      res(resVal !== undefined ? resVal : val)
-    }
-    for (const {res} of this.catchListener) res(val)
-    this.status = "resolved"
-    this.resVal = val;
-  }
-  private _rej(val: any) {
-    if (this.status !== "pending") return
-    for (const {f, res} of this.catchListener) {
-      const resVal = f(val)
-      res(resVal !== undefined ? resVal : val)
-    }
-    for (const {rej} of this.thenListener) rej(val)
-    if (this.duringConstructor && this.catchListener.length === 0) throw new Error("Unhandled promise rejection: " + val)
-    this.status = "rejected"
   }
 
-  // then<TResult1 = T, TResult2 = never>(
-  //   onfulfilled: ((value: T) => TResult1 | PromiseLike<TResult1>) | null | undefined,
-  //   onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined
-  // )
+  // Internal resolve
+  private _resolve(value?: T | PromiseLike<T>) {
+    if (this.state !== "pending") return;
 
-  then<R = T, R2 = never>(to: ((res: T) => R | PromiseLike<R>) | null | undefined, onCatch?: ((err: any) => R2 | PromiseLike<R2>) | undefined | null): PromiseLike<R | R2> {
-    
-    if (to === undefined || to === null) return this as any
-    if (this.status === "resolved") return SyncPromise.resolve(to(this.resVal))
-    else if (this.status === "pending") {
-      
-      return new (this as any).constructor((res, rej) => {
-        if (onCatch) this.catchListener.push({res, f: onCatch})
-        this.thenListener.push({res, rej, f: to})
-      })
-
-    }
-    else return this as any
-  }
-  catch<R = never>(to: ((err: any) => R | PromiseLike<R>) | null | undefined): PromiseLike<R | T> {
-    if (!to) return this
-    if (this.status === "pending") {
-      return new (this as any).constructor((res) => {
-        this.catchListener.push({res, f: to})
-      })
-    }
-    return this
-  }
-  finally(to: (() => void) | undefined | null): SyncPromise<T> {
-    if (!to) return this
-    if (this.status === "pending") {
-      return new (this as any).constructor((res) => {
-        this.catchListener.push({res, f: to})
-        this.thenListener.push({res, rej: res, f: to})
-      })
-    }
-    return this
-  }
-
-
-
-
-  public static resolve<T>(res?: T | PromiseLike<T>) {
-    return new SyncPromise<T>((r) => {r(res)})
-  }
-  public static reject(val) {
-    return new SyncPromise((r, n) => {n(val)})
-  }
-  public static all(proms: SyncPromise[]) {
-    return new SyncPromise((res, rej) => {
-      const resArr = []
-      for (const prom of proms) {
-        prom.then((r) => {
-          resArr.push(r)
-          if (resArr.length === proms.length) res(resArr)
-        }, rej)
+    // Handle "Thenables" (Promises or objects with a .then method)
+    if (value && (typeof value === "object" || typeof value === "function")) {
+      let then: any;
+      try {
+        then = (value as any).then;
+      } catch (err) {
+        this._reject(err);
+        return;
       }
-    })
-  }
-  public static race(proms: SyncPromise[]) {
-    return new SyncPromise((res, rej) => {
-      for (const prom of proms) {
-        prom.then(res, rej)
+
+      if (typeof then === "function") {
+        // If it's a promise, wait for it to settle
+        try {
+            then.call(
+                value, 
+                this._resolve.bind(this), 
+                this._reject.bind(this)
+            );
+        } catch (error) {
+            this._reject(error);
+        }
+        return;
       }
-    })
+    }
+
+    this.state = "fulfilled";
+    this.value = value;
+    this._executeHandlers();
   }
-  public static allSettled(proms: SyncPromise[]) {
-    return new SyncPromise((res, rej) => {
-      const resArr = []
-      for (const prom of proms) {
-        prom.then((r) => {
-          resArr.push({status: "resolved", value: r})
-          if (resArr.length === proms.length) res(resArr)
-        }, (e) => {
-          resArr.push({status: "rejected", reason: e})
-          if (resArr.length === proms.length) res(resArr)
-        })
+
+  // Internal reject
+  private _reject(reason?: any) {
+    if (this.state !== "pending") return;
+    this.state = "rejected";
+    this.value = reason;
+    this._executeHandlers();
+  }
+
+  // Process all waiting dependent promises
+  private _executeHandlers() {
+    if (this.state === "pending") return;
+
+    this.handlers.forEach((handler) => {
+      const { onFulfilled, onRejected, resolve, reject } = handler;
+
+      try {
+        if (this.state === "fulfilled") {
+          if (typeof onFulfilled === "function") {
+            // Transform the value
+            resolve(onFulfilled(this.value));
+          } else {
+            // Pass through the value
+            resolve(this.value);
+          }
+        } else if (this.state === "rejected") {
+          if (typeof onRejected === "function") {
+            // Handle the error and recover
+            resolve(onRejected(this.value));
+          } else {
+            // Pass through the error
+            reject(this.value);
+          }
+        }
+      } catch (err) {
+        // If the handler throws, reject the dependent promise
+        reject(err);
       }
-    })
+    });
+
+    // Clear handlers as they have been executed
+    this.handlers = [];
+  }
+
+  public then<TResult1 = T, TResult2 = never>(
+    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
+  ): SyncPromise<TResult1 | TResult2> {
+    return new SyncPromise<TResult1 | TResult2>((resolve, reject) => {
+      this.handlers.push({
+        onFulfilled: onfulfilled,
+        onRejected: onrejected,
+        resolve,
+        reject,
+      });
+      // Try to execute immediately if already settled
+      this._executeHandlers();
+    });
+  }
+
+  public catch<TResult = never>(
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
+  ): SyncPromise<T | TResult> {
+    return this.then(null, onrejected);
+  }
+
+  public finally(onfinally?: (() => void) | null): SyncPromise<T> {
+    return this.then(
+      (value) => {
+        if (onfinally) {
+            try { onfinally(); } catch(e) { throw e; }
+        }
+        return value;
+      },
+      (reason) => {
+        if (onfinally) {
+            try { onfinally(); } catch(e) { throw e; }
+        }
+        throw reason;
+      }
+    ) as SyncPromise<T>;
+  }
+
+  // --- Static Methods ---
+
+  public static resolve<T>(value?: T | PromiseLike<T>): SyncPromise<T> {
+    return new SyncPromise<T>((res) => res(value));
+  }
+
+  public static reject(reason?: any): SyncPromise<never> {
+    return new SyncPromise<never>((_, rej) => rej(reason));
+  }
+
+  public static all<T>(promises: (T | PromiseLike<T>)[]): SyncPromise<T[]> {
+    return new SyncPromise((resolve, reject) => {
+      // FIX: Handle empty array immediately
+      if (promises.length === 0) {
+        resolve([]);
+        return;
+      }
+
+      const results = new Array(promises.length);
+      let completedCount = 0;
+
+      promises.forEach((val, index) => {
+        // Normalize everything to a SyncPromise
+        SyncPromise.resolve(val).then(
+          (result) => {
+            // FIX: Assign by index to preserve order
+            results[index] = result;
+            completedCount++;
+            if (completedCount === promises.length) {
+              resolve(results);
+            }
+          },
+          (err) => {
+            // FIX: Fail fast
+            reject(err);
+          }
+        );
+      });
+    });
+  }
+
+  public static allSettled<T>(
+    promises: (T | PromiseLike<T>)[]
+  ): SyncPromise<{ status: "fulfilled" | "rejected"; value?: T; reason?: any }[]> {
+    return new SyncPromise((resolve) => {
+        if (promises.length === 0) {
+            resolve([]);
+            return;
+        }
+
+      const results = new Array(promises.length);
+      let completedCount = 0;
+
+      const checkDone = () => {
+        completedCount++;
+        if (completedCount === promises.length) {
+          resolve(results);
+        }
+      };
+
+      promises.forEach((val, index) => {
+        SyncPromise.resolve(val).then(
+          (value) => {
+            results[index] = { status: "fulfilled", value };
+            checkDone();
+          },
+          (reason) => {
+            results[index] = { status: "rejected", reason };
+            checkDone();
+          }
+        );
+      });
+    });
+  }
+
+  public static race<T>(promises: (T | PromiseLike<T>)[]): SyncPromise<T> {
+    return new SyncPromise((resolve, reject) => {
+      // Note: race([]) never resolves, intentionally matching spec
+      promises.forEach((val) => {
+        SyncPromise.resolve(val).then(resolve, reject);
+      });
+    });
   }
 }
+
 
 
 // type PromInterface<T> = {
@@ -222,8 +323,8 @@ export const CancelAbleSyncPromise: CancelAbleSyncPromiseConstructor = _CancelAb
 
 
 
-function isPromiseDuckType(p: any): p is PromiseLike<any> {
-  return p != null && typeof p.then === 'function'
+function isPromiseDuckType(p: any): p is PromiseLike<unknown> {
+  return p && (typeof p === 'object' || typeof p === 'function') && typeof p.then === 'function';
 }
 
 function isCancelAblePromiseDuckType(p: any): p is CancelAblePromise<any, any, any> {
