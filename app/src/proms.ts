@@ -279,7 +279,7 @@ function mkExt(Prom: typeof Promise) {
   
       this.res = (arg) => {
         res(arg)
-        return Promise.all(this.thenChildProms)
+        return Prom.all(this.thenChildProms)
       }
       this.rej = rej
     }
