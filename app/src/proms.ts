@@ -380,7 +380,7 @@ function mkExt(Prom: typeof Promise) {
   
       this.res = (arg) => {
         res(arg)
-        return Prom.all(this.thenChildProms)
+        return Prom.allSettled(this.thenChildProms)
       }
       this.rej = rej
     }
