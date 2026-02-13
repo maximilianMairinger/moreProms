@@ -331,6 +331,8 @@ function isCancelAblePromiseDuckType(p: any): p is CancelAblePromise<any, any, a
   return isPromiseDuckType(p) && typeof (p as any).cancel === 'function'
 }
 
+const debugHint = Symbol("debugHint")
+
 const cancelableAwaitWarned = new WeakSet<object>()
 function shouldWarnCancelableAwait(onfulfilled: any, onrejected: any, onCancel: any) {
   if (onCancel !== undefined) return false
@@ -394,6 +396,7 @@ function mkExt(Prom: typeof Promise) {
     private catchChildProms = []
     then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): Promise<TResult1 | TResult2> {
       const r = super.then(onfulfilled, onrejected) as any
+      r[debugHint] = {onfulfilled, onrejected}
       if (this.settled) return r
       this.thenChildProms.push(r)
       return r
